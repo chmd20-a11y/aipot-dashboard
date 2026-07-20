@@ -185,11 +185,23 @@
 <body>
 <div class="wrap">
 
+  <!-- PROFILE (사용자 선택) -->
+  <section id="screen-profile" class="hidden">
+    <div style="max-width:600px;margin:7vh auto 0;text-align:center">
+      <div class="brand" style="font-size:27px">AI-POT 2급 대시보드</div>
+      <p style="color:var(--muted);margin:12px 0 8px;font-size:15px">누가 학습하나요?</p>
+      <p style="color:var(--muted);margin:0 0 26px;font-size:13px">사용자를 선택하면 그 사람의 점수·오답·기록·학습 진척이 <b>따로</b> 관리됩니다. (로그인 불필요)</p>
+      <div id="profileCards" style="display:grid;grid-template-columns:1fr 1fr;gap:16px"></div>
+      <p style="color:#9aa7b6;font-size:11.5px;margin-top:22px">각 사용자의 데이터는 이 브라우저에만 저장됩니다.</p>
+    </div>
+  </section>
+
   <!-- HOME -->
   <section id="screen-home">
     <div class="top">
       <span class="brand">AI-POT 2급 모의고사 &amp; 학습 대시보드</span>
       <span class="badge">한국생산성본부 · CBT 대비</span>
+      <span id="userChip" onclick="switchProfile()" title="사용자 전환" style="margin-left:auto;background:#eaf0f7;color:var(--blue);font-weight:700;font-size:13px;padding:6px 13px;border-radius:999px;cursor:pointer;white-space:nowrap">👤 <b id="userName"></b> · 전환</span>
     </div>
     <div class="cond">실전과 동일 조건 재현 · <b>40문항 / 60분 / 100점 만점 70점 이상 합격</b> · 객관식 <b id="condQ"></b>문항 + 실습형 <b id="condP"></b>문항 · <b>매 회차 안 푼 문항 우선 출제</b>(중복 최소화) · 문제·보기 순서 랜덤</div>
 
@@ -351,10 +363,10 @@ RAW.forEach((q,i)=>q.id=i);
 
 const $=s=>document.querySelector(s);
 const LS={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set(k,v){localStorage.setItem(k,JSON.stringify(v))}};
-const HKEY="aipot_history",WKEY="aipot_wrong_v3";
+let CUR=localStorage.getItem("aipot_current")||"";
+let HKEY,WKEY,SKEY;
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function prep(q){const idx=shuffle([0,1,2,3]);return {id:q.id,a:q.a,q:q.q,options:idx.map(i=>q.o[i]),correct:idx.indexOf(q.c),e:q.e};}
-const SKEY="aipot_seen";
 function getSeen(){return LS.get(SKEY,{});}
 function markSeen(qs){const s=getSeen();qs.forEach(q=>{s[q.id]=(s[q.id]||0)+1;});LS.set(SKEY,s);}
 function coverage(){const s=getSeen();return {n:RAW.filter(q=>(s[q.id]||0)>0).length,total:RAW.length};}
@@ -366,6 +378,7 @@ function fmt(sec){const m=Math.floor(sec/60),s=sec%60;return String(m).padStart(
 /* ===== 홈 ===== */
 function goHome(){renderHome();show('screen-home');}
 function renderHome(){
+  const un=document.getElementById('userName');if(un)un.textContent=pnames()[CUR]||'사용자';
   const hist=LS.get(HKEY,[]);const n=hist.length;
   const best=n?Math.max(...hist.map(h=>h.score)):0;
   const avg=n?Math.round(hist.reduce((s,h)=>s+h.score,0)/n):0;
@@ -515,9 +528,28 @@ function clearWrong(){if(confirm('저장된 오답을 모두 삭제할까요?'))
 function openInfo(){$('#infoAreas').innerHTML=Object.keys(AREA).map(a=>`<div style="padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px"><b style="color:var(--navy)">${a}. ${AREA[a]}</b> <span style="color:var(--muted)">— 문제은행 ${RAW.filter(q=>q.a==a).length}문항</span></div>`).join('');show('screen-info');}
 
 /* ===== 초기화 ===== */
-function resetAll(){if(confirm('모든 응시 기록·통계·오답노트·학습 진척을 삭제합니다. 계속할까요?')){localStorage.removeItem(HKEY);localStorage.removeItem(WKEY);localStorage.removeItem(SKEY);renderHome();}}
+function resetAll(){const nm=(pnames()[CUR]||'현재 사용자');if(confirm("'"+nm+"' 사용자의 응시 기록·통계·오답노트·학습 진척을 삭제합니다. 계속할까요?")){localStorage.removeItem(HKEY);localStorage.removeItem(WKEY);localStorage.removeItem(SKEY);renderHome();}}
 
-renderHome();
+/* ===== 사용자(프로필) ===== */
+function pnames(){return LS.get("aipot_names",{p1:"사용자 1",p2:"사용자 2"});}
+function setPnames(o){LS.set("aipot_names",o);}
+function applyProfile(id){CUR=id;localStorage.setItem("aipot_current",id);HKEY="aipot_history__"+id;WKEY="aipot_wrong_v3__"+id;SKEY="aipot_seen__"+id;}
+function renderProfile(){const nm=pnames();$('#profileCards').innerHTML=['p1','p2'].map(id=>`
+  <div class="panel" style="cursor:pointer;text-align:center;padding:26px 16px" onclick="chooseProfile('${id}')">
+    <div style="font-size:44px">${id==='p1'?'🧑‍💻':'👩‍💻'}</div>
+    <div style="font-size:19px;font-weight:800;color:var(--navy);margin:10px 0 4px">${esc(nm[id])}</div>
+    <div style="font-size:12px;color:var(--muted)">이 사용자로 시작 →</div>
+    <button class="ghost" style="margin-top:14px" onclick="event.stopPropagation();renameProfile('${id}')">✏️ 이름 변경</button>
+  </div>`).join('');}
+function chooseProfile(id){applyProfile(id);renderHome();show('screen-home');}
+function switchProfile(){renderProfile();show('screen-profile');}
+function renameProfile(id){const nm=pnames();const v=prompt('사용자 이름을 입력하세요',nm[id]);if(v&&v.trim()){nm[id]=v.trim().slice(0,20);setPnames(nm);renderProfile();const un=document.getElementById('userName');if(un&&CUR===id)un.textContent=nm[id];}}
+function migrateOld(){if(localStorage.getItem("aipot_migrated"))return;const map={"aipot_history":"aipot_history__p1","aipot_wrong_v3":"aipot_wrong_v3__p1","aipot_seen":"aipot_seen__p1"};for(const k in map){const v=localStorage.getItem(k);if(v!==null&&localStorage.getItem(map[k])===null)localStorage.setItem(map[k],v);}localStorage.setItem("aipot_migrated","1");}
+
+/* ===== 시작 ===== */
+migrateOld();
+if(CUR==="p1"||CUR==="p2"){applyProfile(CUR);renderHome();show('screen-home');}
+else{renderProfile();show('screen-profile');}
 </script>
 </body>
 </html>
