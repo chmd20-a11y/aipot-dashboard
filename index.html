@@ -531,19 +531,16 @@ function openInfo(){$('#infoAreas').innerHTML=Object.keys(AREA).map(a=>`<div sty
 function resetAll(){const nm=(pnames()[CUR]||'현재 사용자');if(confirm("'"+nm+"' 사용자의 응시 기록·통계·오답노트·학습 진척을 삭제합니다. 계속할까요?")){localStorage.removeItem(HKEY);localStorage.removeItem(WKEY);localStorage.removeItem(SKEY);renderHome();}}
 
 /* ===== 사용자(프로필) ===== */
-function pnames(){return LS.get("aipot_names",{p1:"사용자 1",p2:"사용자 2"});}
-function setPnames(o){LS.set("aipot_names",o);}
+function pnames(){return {p1:"정덕진",p2:"정상옥"};}
 function applyProfile(id){CUR=id;localStorage.setItem("aipot_current",id);HKEY="aipot_history__"+id;WKEY="aipot_wrong_v3__"+id;SKEY="aipot_seen__"+id;}
 function renderProfile(){const nm=pnames();$('#profileCards').innerHTML=['p1','p2'].map(id=>`
   <div class="panel" style="cursor:pointer;text-align:center;padding:26px 16px" onclick="chooseProfile('${id}')">
     <div style="font-size:44px">${id==='p1'?'🧑‍💻':'👩‍💻'}</div>
     <div style="font-size:19px;font-weight:800;color:var(--navy);margin:10px 0 4px">${esc(nm[id])}</div>
-    <div style="font-size:12px;color:var(--muted)">이 사용자로 시작 →</div>
-    <button class="ghost" style="margin-top:14px" onclick="event.stopPropagation();renameProfile('${id}')">✏️ 이름 변경</button>
+    <div style="font-size:12px;color:var(--muted);margin-top:6px">이 사용자로 시작 →</div>
   </div>`).join('');}
 function chooseProfile(id){applyProfile(id);renderHome();show('screen-home');}
 function switchProfile(){renderProfile();show('screen-profile');}
-function renameProfile(id){const nm=pnames();const v=prompt('사용자 이름을 입력하세요',nm[id]);if(v&&v.trim()){nm[id]=v.trim().slice(0,20);setPnames(nm);renderProfile();const un=document.getElementById('userName');if(un&&CUR===id)un.textContent=nm[id];}}
 function migrateOld(){if(localStorage.getItem("aipot_migrated"))return;const map={"aipot_history":"aipot_history__p1","aipot_wrong_v3":"aipot_wrong_v3__p1","aipot_seen":"aipot_seen__p1"};for(const k in map){const v=localStorage.getItem(k);if(v!==null&&localStorage.getItem(map[k])===null)localStorage.setItem(map[k],v);}localStorage.setItem("aipot_migrated","1");}
 
 /* ===== 시작 ===== */
