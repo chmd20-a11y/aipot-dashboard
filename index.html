@@ -81,6 +81,7 @@
       <p style="color:var(--muted);margin:12px 0 8px;font-size:15px">누가 학습하나요?</p>
       <p style="color:var(--muted);margin:0 0 26px;font-size:13px">사용자를 선택하면 그 사람의 점수·오답·기록이 <b>시험별로 따로</b> 관리됩니다. (로그인 불필요)</p>
       <div id="profileCards" style="display:grid;grid-template-columns:1fr 1fr;gap:16px"></div>
+      <div id="profileLog"></div>
       <p style="color:#9aa7b6;font-size:11.5px;margin-top:22px">각 사용자의 데이터는 이 브라우저에만 저장됩니다.</p>
     </div>
   </section>
@@ -177,13 +178,13 @@ function pickByArea(dist){const s=getSeen();const out=[];for(const a in dist){co
 
 /* ===== 프로필 ===== */
 function pnames(){return {p1:"정덕진",p2:"정상옥"};}
-function applyProfile(id){CUR=id;localStorage.setItem("aipot_current",id);applyKeys();}
+function applyProfile(id){accountTime();CUR=id;localStorage.setItem("aipot_current",id);applyKeys();}
 function renderProfile(){const nm=pnames();$('#profileCards').innerHTML=['p1','p2'].map(id=>`
   <div class="panel" style="cursor:pointer;text-align:center;padding:26px 16px" onclick="chooseProfile('${id}')">
     <div style="font-size:44px">${id==='p1'?'🧑‍💻':'👩‍💻'}</div>
     <div style="font-size:19px;font-weight:800;color:var(--navy);margin:10px 0 4px">${esc(nm[id])}</div>
     <div style="font-size:12px;color:var(--muted);margin-top:6px">이 사용자로 시작 →</div>
-  </div>`).join('');}
+  </div>`).join('');renderTimeLog();}
 function chooseProfile(id){applyProfile(id);renderHome();show('screen-home');}
 function switchProfile(){renderProfile();show('screen-profile');}
 
@@ -313,6 +314,39 @@ function openInfo(){const c=C();
 
 /* ===== 초기화 ===== */
 function resetAll(){const nm=pnames()[CUR]||'현재 사용자';if(confirm("'"+nm+"'의 ["+C().short+"] 응시 기록·오답·진척을 삭제합니다. 계속할까요?")){localStorage.removeItem(HKEY);localStorage.removeItem(WKEY);localStorage.removeItem(SKEY);renderHome();}}
+
+/* ===== 학습 시간 로그 ===== */
+function pad2(n){return String(n).padStart(2,'0');}
+function dkey(d){return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());}
+function todayKey(){return dkey(new Date());}
+function fmtDur(sec){sec=Math.round(sec||0);if(sec<60)return sec+'초';const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60);if(h>0)return m?h+'시간 '+m+'분':h+'시간';return m+'분';}
+function addTime(user,sec){if(!(user==='p1'||user==='p2')||sec<=0)return;const k='t__'+user;const m=LS.get(k,{});const d=todayKey();m[d]=(m[d]||0)+sec;LS.set(k,m);}
+function timeSummary(user){const m=LS.get('t__'+user,{});const now=new Date();const tk=todayKey();const ym=now.getFullYear()+'-'+pad2(now.getMonth()+1);const wd=(now.getDay()+6)%7;const sw=new Date(now);sw.setHours(0,0,0,0);sw.setDate(sw.getDate()-wd);let day=0,week=0,month=0,total=0;for(const k in m){const v=m[k]||0;total+=v;if(k===tk)day+=v;if(k.slice(0,7)===ym)month+=v;if(new Date(k+'T00:00:00')>=sw)week+=v;}return{day,week,month,total};}
+function last7(user){const m=LS.get('t__'+user,{});const dows=['일','월','화','수','목','금','토'];const tk=todayKey();const out=[];for(let i=6;i>=0;i--){const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-i);const k=dkey(d);out.push({dow:dows[d.getDay()],sec:m[k]||0,today:k===tk,label:k});}return out;}
+function tstat(label,sec,color){return '<div><div style="font-size:11px;color:var(--muted);margin-bottom:3px">'+label+'</div><div style="font-weight:800;font-size:14px;color:'+color+';line-height:1.2">'+fmtDur(sec)+'</div></div>';}
+function timeCard(id,name){const s=timeSummary(id);const sp=last7(id);const mx=Math.max(1,...sp.map(d=>d.sec));
+  return '<div class="panel" style="padding:16px 15px 13px;text-align:left">'
+   +'<div style="font-weight:800;color:var(--navy);font-size:15px;margin-bottom:12px">'+(id==='p1'?'🧑‍💻':'👩‍💻')+' '+esc(name)+'</div>'
+   +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;margin-bottom:13px">'+tstat('오늘',s.day,'var(--blue)')+tstat('이번 주',s.week,'var(--navy)')+tstat('이번 달',s.month,'var(--navy)')+'</div>'
+   +'<div style="display:flex;align-items:flex-end;gap:5px;height:40px">'+sp.map(d=>{const h=Math.max(3,Math.round(d.sec/mx*36));return '<div style="flex:1;height:'+h+'px;border-radius:3px 3px 0 0;background:'+(d.today?'var(--blue)':'#cdd9e6')+'" title="'+d.label+' · '+fmtDur(d.sec)+'"></div>';}).join('')+'</div>'
+   +'<div style="display:flex;gap:5px;margin-top:4px">'+sp.map(d=>'<div style="flex:1;text-align:center;font-size:9.5px;color:'+(d.today?'var(--blue)':'var(--muted)')+'">'+d.dow+'</div>').join('')+'</div>'
+   +'<div style="text-align:right;font-size:11px;color:#9aa7b6;margin-top:9px">누적 '+fmtDur(s.total)+'</div>'
+   +'</div>';}
+function renderTimeLog(){const box=$('#profileLog');if(!box)return;const nm=pnames();
+  box.innerHTML='<div style="margin-top:30px">'
+   +'<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:13px"><span style="font-size:15px;font-weight:800;color:var(--navy)">⏱️ 학습 시간 로그</span><span style="font-size:11.5px;color:var(--muted)">실제 문제 푼 활동 시간 자동 기록</span></div>'
+   +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">'+timeCard('p1',nm.p1)+timeCard('p2',nm.p2)+'</div>'
+   +'<div style="font-size:11px;color:#9aa7b6;margin-top:10px;text-align:center">막대=최근 7일 · 60초 이상 무활동 시 자동 정지 · 이 브라우저 기준</div></div>';}
+
+/* 활동 시간 측정 엔진 */
+let _lastAct=Date.now(),_lastAcc=Date.now();
+function _throttle(fn,ms){let t=0;return function(){const n=Date.now();if(n-t>=ms){t=n;fn();}};}
+function accountTime(){const now=Date.now();if(document.visibilityState==='visible'&&(now-_lastAct)<60000&&(CUR==='p1'||CUR==='p2')){const d=Math.round((now-_lastAcc)/1000);if(d>0)addTime(CUR,Math.min(d,60));}_lastAcc=now;}
+['mousemove','mousedown','keydown','scroll','touchstart','click'].forEach(ev=>document.addEventListener(ev,_throttle(()=>{_lastAct=Date.now();},1500),{passive:true}));
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'){_lastAcc=Date.now();_lastAct=Date.now();if(!$('#screen-profile').classList.contains('hidden'))renderTimeLog();}else accountTime();});
+window.addEventListener('pagehide',accountTime);
+window.addEventListener('beforeunload',accountTime);
+setInterval(accountTime,15000);
 
 /* ===== 마이그레이션 & 시작 ===== */
 function migrateOld(){if(localStorage.getItem("mig2"))return;[["aipot_history__p1","h__p1__aipot"],["aipot_history__p2","h__p2__aipot"],["aipot_wrong_v3__p1","w__p1__aipot"],["aipot_wrong_v3__p2","w__p2__aipot"],["aipot_seen__p1","s__p1__aipot"],["aipot_seen__p2","s__p2__aipot"]].forEach(([o,n])=>{const v=localStorage.getItem(o);if(v!==null&&localStorage.getItem(n)===null)localStorage.setItem(n,v);});localStorage.setItem("mig2","1");}
