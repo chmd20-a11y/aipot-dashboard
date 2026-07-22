@@ -142,10 +142,14 @@
     <div class="panel"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">실습형은 <b>정답이 하나가 아닙니다.</b> 직접 작성한 뒤 모범답안·채점 포인트로 자가 채점하세요.</div><div class="tabs" id="pracTabs"></div><div id="pracCard"></div><div class="study-nav"><button class="nav-btn" onclick="pracMove(-1)">← 이전</button><span class="cnt" id="pracCnt"></span><button class="nav-btn primary" onclick="pracMove(1)">다음 →</button></div></div>
   </section>
 
-  <!-- WRONG -->
+  <!-- WRONG / REVIEW -->
   <section id="screen-wrong" class="hidden">
-    <div class="toolbar"><button class="back" onclick="goHome()">← 홈으로</button><strong style="color:var(--accent)">🔁 오답노트</strong><button class="ghost" style="margin-left:auto" onclick="clearWrong()">오답 비우기</button></div>
-    <div class="panel"><div id="wrongList"></div></div>
+    <div class="toolbar"><button class="back" onclick="goHome()">← 홈으로</button><strong style="color:var(--accent)">🔁 복습노트</strong><button class="ghost" style="margin-left:auto" onclick="clearWrong()">현재 목록 비우기</button></div>
+    <div class="panel">
+      <div class="filterbar"><button class="chip on" id="rwWrong" onclick="setReviewTab('wrong')">❌ 틀린 문제</button><button class="chip" id="rwFreq" onclick="setReviewTab('freq')">🔥 자주 틀린 문제</button><button class="chip" id="rwMark" onclick="setReviewTab('mark')">⭐ 다시 볼 문제</button></div>
+      <div id="reviewActions" style="margin:4px 0 14px"></div>
+      <div id="wrongList"></div>
+    </div>
   </section>
 
   <!-- INFO -->
@@ -162,7 +166,7 @@ let CUR=localStorage.getItem("aipot_current")||"";
 let RAW,AREA,PRACTICAL,CFG,HKEY,WKEY,SKEY;
 function C(){return DATA.courses[COURSE];}
 function loadCourse(){RAW=C().questions;RAW.forEach((q,i)=>q.id=i);AREA=C().areas;PRACTICAL=C().practical||{A:[],B:[],C:[],D:[]};CFG=C().config;}
-function applyKeys(){HKEY="h__"+CUR+"__"+COURSE;WKEY="w__"+CUR+"__"+COURSE;SKEY="s__"+CUR+"__"+COURSE;}
+function applyKeys(){HKEY="h__"+CUR+"__"+COURSE;WKEY="w__"+CUR+"__"+COURSE;SKEY="s__"+CUR+"__"+COURSE;MKEY="m__"+CUR+"__"+COURSE;FKEY="f__"+CUR+"__"+COURSE;XKEY="x__"+CUR+"__"+COURSE;}
 
 const $=s=>document.querySelector(s);
 const LS={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set(k,v){localStorage.setItem(k,JSON.stringify(v))}};
@@ -174,7 +178,7 @@ function show(id){document.querySelectorAll('section').forEach(s=>s.classList.ad
 function getSeen(){return LS.get(SKEY,{});}
 function markSeen(qs){const s=getSeen();qs.forEach(q=>{s[q.id]=(s[q.id]||0)+1;});LS.set(SKEY,s);}
 function coverage(){const s=getSeen();return {n:RAW.filter(q=>(s[q.id]||0)>0).length,total:RAW.length};}
-function pickByArea(dist){const s=getSeen();const out=[];for(const a in dist){const pool=RAW.filter(q=>q.a==a).map(q=>({q,c:s[q.id]||0,r:Math.random()}));pool.sort((x,y)=>x.c-y.c||x.r-y.r);out.push(...pool.slice(0,dist[a]).map(x=>x.q));}return shuffle(out).map(prep);}
+function pickByArea(dist){const s=getSeen();const fc=LS.get(FKEY,{})||{},xz=LS.get(XKEY,[])||[];const out=[];for(const a in dist){const pool=RAW.filter(q=>q.a==a).map(q=>{const cnt=fc[q.id]||0;const boost=(cnt>=2&&!xz.includes(q.id))?cnt:0;return {q,c:(s[q.id]||0)-boost,r:Math.random()};});pool.sort((x,y)=>x.c-y.c||x.r-y.r);out.push(...pool.slice(0,dist[a]).map(x=>x.q));}return shuffle(out).map(prep);}
 
 /* ===== 프로필 ===== */
 function pnames(){return {p1:"정덕진",p2:"정상옥"};}
@@ -223,7 +227,8 @@ function renderModes(){
   <button class="mode m-mini" onclick="startMini()"><span class="ic">⏱️</span><span><span class="t">미니 모의고사</span><br><span class="s">${CFG.mini}문항·${Math.round(CFG.miniSec/60)}분</span></span></button>
   <button class="mode m-study" onclick="openStudy()"><span class="ic">📚</span><span><span class="t">영역별 학습</span><br><span class="s">${RAW.length}문항+해설</span></span></button>`;
   if(hasP)b+=`<button class="mode m-prac" onclick="openPrac()"><span class="ic">✍️</span><span><span class="t">실습형 연습</span><br><span class="s">프롬프트 작성·개선</span></span></button>`;
-  b+=`<button class="mode m-wrong" onclick="openWrong()"><span class="ic">🔁</span><span><span class="t">오답노트</span><br><span class="s">틀린 문제 복습</span></span></button>
+  const wN=(LS.get(WKEY,[])||[]).length,mN=(LS.get(MKEY,[])||[]).length,fN=freqIds().length;
+  b+=`<button class="mode m-wrong" onclick="openWrong()"><span class="ic">🔁</span><span><span class="t">복습노트</span><br><span class="s">틀린 ${wN} · 🔥${fN} · 다시 볼 ${mN}</span></span></button>
   <button class="mode m-info" onclick="openInfo()"><span class="ic">📋</span><span><span class="t">시험 정보</span><br><span class="s">일정·구성</span></span></button>`;
   $('#modeBox').innerHTML=b;
 }
@@ -250,12 +255,13 @@ function jump(i){exam.cur=i;renderExamQ();renderNav();}
 function toggleMark(){exam.marked[exam.cur]=!exam.marked[exam.cur];renderExamQ();renderNav();}
 function confirmSubmit(){const left=exam.N-Object.keys(exam.answers).length;let m='답안을 제출하시겠습니까?';if(left>0)m=`아직 풀지 않은 문제가 ${left}개 있습니다.\n그래도 제출하시겠습니까?`;if(confirm(m))gradeExam(false);}
 function gradeExam(auto){clearInterval(timerId);window.onbeforeunload=null;
-  let correct=0;const as={};Object.keys(AREA).forEach(a=>as[a]={c:0,t:0});const wrong=LS.get(WKEY,[]);
-  exam.qs.forEach((q,i)=>{const a=String(q.a);as[a].t++;const ok=exam.answers[i]===q.correct;if(ok){correct++;as[a].c++;}else if(!wrong.includes(q.id))wrong.push(q.id);});
-  LS.set(WKEY,wrong);
+  const rev=exam.review;let correct=0;const as={};Object.keys(AREA).forEach(a=>as[a]={c:0,t:0});const wrong=LS.get(WKEY,[]);const mastered=[];const fc=rev?null:LS.get(FKEY,{});
+  exam.qs.forEach((q,i)=>{const a=String(q.a);if(as[a])as[a].t++;const ok=exam.answers[i]===q.correct;if(ok){correct++;if(as[a])as[a].c++;if(rev)mastered.push(q.id);}else if(!rev){if(!wrong.includes(q.id))wrong.push(q.id);fc[q.id]=(fc[q.id]||0)+1;}});
+  if(rev==='wrong'||rev==='mark'){const rk=rev==='mark'?MKEY:WKEY;LS.set(rk,LS.get(rk,[]).filter(id=>!mastered.includes(id)));}
+  else if(!rev){LS.set(WKEY,wrong);LS.set(FKEY,fc);const marks=LS.get(MKEY,[]);exam.qs.forEach((q,i)=>{if(exam.marked[i]&&!marks.includes(q.id))marks.push(q.id);});LS.set(MKEY,marks);}
   const score=Math.round(correct/exam.N*1000)/10;const si=Number.isInteger(score)?score:score.toFixed(1);const pass=score>=exam.pass;const tu=exam.total-exam.seconds;
   const rec={date:new Date().toLocaleString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}),mode:exam.mode,N:exam.N,score:score,correct:correct,pass:pass,timeUsed:tu,areaStats:as,auto:auto};
-  const h=LS.get(HKEY,[]);h.push(rec);LS.set(HKEY,h);renderResult(rec,si);
+  if(!rev){const h=LS.get(HKEY,[]);h.push(rec);LS.set(HKEY,h);}renderResult(rec,si);
 }
 let revFilter='all';
 function renderResult(rec,si){const pass=rec.pass;const ring=$('#scoreRing');ring.style.setProperty('--p',rec.score);ring.style.setProperty('--rc',pass?'#1e874b':'#c0392b');
@@ -269,7 +275,7 @@ function setRevFilter(f){revFilter=f;$('#fAll').classList.toggle('on',f==='all')
 function renderReview(){const rows=exam.qs.map((q,i)=>{const ua=exam.answers[i],ok=ua===q.correct;if(revFilter==='wrong'&&ok)return '';
   return `<div class="rev"><div class="rq"><span class="qtag" style="margin:0 8px 0 0">${q.a}. ${esc(AREA[q.a])}</span>Q${i+1}. ${esc(q.q)}<span class="rstat ${ok?'o':'x'}">${ok?'정답':'오답'}</span></div>${q.options.map((o,j)=>{let c='';if(j===q.correct)c='c';else if(j===ua&&!ok)c='w';const t=j===q.correct?' ✔ 정답':(j===ua&&!ok?' ✘ 내 선택':'');return `<div class="ro ${c}">${'①②③④'[j]} ${esc(o)}${t}</div>`;}).join('')}${ua===undefined?'<div class="ro w">미응답</div>':''}<div class="expl"><b>해설</b> · ${esc(q.e)}</div></div>`;}).join('');
   $('#reviewList').innerHTML=rows||'<div class="empty">틀린 문제가 없습니다! 완벽합니다 👏</div>';}
-function retryExam(){if(exam.mode.startsWith('실전'))startFull();else startMini();}
+function retryExam(){if(exam.review){reviewTab=exam.review;startReview();return;}if(exam.mode.startsWith('실전'))startFull();else startMini();}
 
 /* ===== 영역별 학습 ===== */
 let study={area:'0',idx:0,pool:[],reveal:false,picked:undefined};
@@ -299,11 +305,33 @@ function pracReveal(){prac.reveal=true;renderPrac();}
 function pracMove(d){const list=PRACTICAL[prac.part];const n=prac.idx+d;if(n>=0&&n<list.length){prac.idx=n;prac.reveal=false;renderPrac();}}
 
 /* ===== 오답노트 ===== */
-function openWrong(){renderWrong();show('screen-wrong');}
-function renderWrong(){const ids=LS.get(WKEY,[]);const el=$('#wrongList');
-  if(!ids.length){el.innerHTML='<div class="empty">틀린 문제가 없습니다. 모의고사에서 오답이 생기면 여기에 모입니다. 📌</div>';return;}
-  el.innerHTML=`<div style="font-size:13px;color:var(--muted);margin-bottom:14px">[${esc(C().short)}] 총 <b style="color:var(--accent)">${ids.length}</b>개 오답</div>`+ids.map(id=>{const q=RAW.find(x=>x.id===id);if(!q)return '';return `<div class="rev"><div class="rq"><span class="qtag" style="margin:0 8px 0 0">${q.a}. ${esc(AREA[q.a])}</span>${esc(q.q)}</div>${q.o.map((o,j)=>`<div class="ro ${j===q.c?'c':''}">${'①②③④'[j]} ${esc(o)}${j===q.c?' ✔ 정답':''}</div>`).join('')}<div class="expl"><b>해설</b> · ${esc(q.e)}</div></div>`;}).join('');}
-function clearWrong(){if(confirm('저장된 오답을 모두 삭제할까요?')){LS.set(WKEY,[]);renderWrong();}}
+let reviewTab='wrong';
+function reviewKeyOf(t){return t==='mark'?MKEY:WKEY;}
+function freqIds(){const fc=LS.get(FKEY,{})||{},ex=LS.get(XKEY,[])||[];return Object.keys(fc).map(Number).filter(id=>fc[id]>=2&&!ex.includes(id)&&RAW.some(x=>x.id===id)).sort((a,b)=>(fc[b]||0)-(fc[a]||0));}
+function reviewIds(t){t=t||reviewTab;if(t==='freq')return freqIds();let ids=LS.get(reviewKeyOf(t),[])||[];const valid=ids.filter(id=>RAW.some(x=>x.id===id));if(valid.length!==ids.length){LS.set(reviewKeyOf(t),valid);ids=valid;}return ids;}
+function openWrong(){reviewTab='wrong';renderWrong();show('screen-wrong');}
+function setReviewTab(t){reviewTab=t;renderWrong();}
+function excludeFreq(id){const ex=LS.get(XKEY,[])||[];if(!ex.includes(id)){ex.push(id);LS.set(XKEY,ex);}renderWrong();}
+function qCardHTML(q,head,foot){return `<div class="rev"><div class="rq"><span class="qtag" style="margin:0 8px 0 0">${q.a}. ${esc(AREA[q.a])}</span>${head||''}${esc(q.q)}</div>${q.o.map((o,j)=>`<div class="ro ${j===q.c?'c':''}">${'①②③④'[j]} ${esc(o)}${j===q.c?' ✔ 정답':''}</div>`).join('')}<div class="expl"><b>해설</b> · ${esc(q.e)}</div>${foot||''}</div>`;}
+function renderWrong(){$('#rwWrong').classList.toggle('on',reviewTab==='wrong');$('#rwFreq').classList.toggle('on',reviewTab==='freq');$('#rwMark').classList.toggle('on',reviewTab==='mark');
+  const ids=reviewIds(),el=$('#wrongList'),act=$('#reviewActions');
+  const label=reviewTab==='mark'?'다시 볼 문제':reviewTab==='freq'?'자주 틀린 문제':'오답';
+  const emptyMsg=reviewTab==='mark'?'⭐ 표시한 문제가 없습니다. 모의고사 중 문제 아래 ‘☆ 다시 볼 문제’ 버튼을 누르면 여기에 모입니다.':reviewTab==='freq'?'🔥 자주 틀린 문제가 아직 없습니다. 같은 문제를 <b>2번 이상</b> 틀리면 여기에 모이고, 모의고사에도 더 자주 출제됩니다.':'틀린 문제가 없습니다. 모의고사에서 오답이 생기면 여기에 모입니다. 📌';
+  if(!ids.length){act.innerHTML='';el.innerHTML=`<div class="empty">${emptyMsg}</div>`;return;}
+  act.innerHTML=`<button class="nav-btn primary" style="padding:9px 16px;font-weight:700" onclick="startReview()">🔁 이 ${ids.length}문제 다시 풀기</button>`;
+  const fc=LS.get(FKEY,{})||{};
+  el.innerHTML=`<div style="font-size:13px;color:var(--muted);margin-bottom:14px">[${esc(C().short)}] 총 <b style="color:var(--accent)">${ids.length}</b>개 ${label}${reviewTab==='freq'?' · 틀린 횟수순':''}</div>`+ids.map(id=>{const q=RAW.find(x=>x.id===id);if(!q)return '';
+    if(reviewTab==='freq'){const head=`<span style="color:#c0392b;font-weight:700;font-size:12px;margin-right:8px">🔥 ${fc[id]||0}회 틀림</span>`;const foot=`<div style="text-align:right;margin-top:8px"><button class="ghost" style="padding:4px 12px;font-size:12px" onclick="excludeFreq(${id})">✖ 자주 틀린 문제에서 제외</button></div>`;return qCardHTML(q,head,foot);}
+    return qCardHTML(q);}).join('');}
+function clearWrong(){if(reviewTab==='freq'){if(confirm('자주 틀린 문제 기록(문항별 틀린 횟수)을 모두 초기화할까요?')){LS.set(FKEY,{});renderWrong();}return;}
+  const key=reviewKeyOf(reviewTab),label=reviewTab==='mark'?'다시 볼 문제':'오답';if(confirm(`저장된 ${label} 목록을 모두 삭제할까요?`)){LS.set(key,[]);renderWrong();}}
+function startReview(){const src=reviewTab,qs=reviewIds(src).map(id=>RAW.find(x=>x.id===id)).filter(Boolean).map(prep);
+  if(!qs.length){alert('다시 풀 문제가 없습니다.');return;}
+  exam={qs:shuffle(qs),answers:{},marked:{},cur:0,N:qs.length,seconds:0,total:0,mode:(src==='mark'?'다시 볼 문제':src==='freq'?'자주 틀린 문제':'오답')+' 다시풀기('+qs.length+'문항)',pass:CFG.pass,review:src};
+  markSeen(exam.qs);$('#examTitle').textContent=C().short+' 복습';
+  const tm=$('#timer');tm.textContent='복습·무제한';tm.classList.remove('warn');
+  show('screen-exam');renderExamQ();renderNav();clearInterval(timerId);
+  window.onbeforeunload=()=>"복습이 진행 중입니다. 페이지를 벗어나면 진행 상황이 사라집니다.";}
 
 /* ===== 시험 정보 ===== */
 function openInfo(){const c=C();
